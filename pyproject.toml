@@ -1,0 +1,25 @@
+[project]
+name = "yogapy"
+version = "0.1.0"
+description = "Cross-platform Yoga layout engine binding for Python"
+readme = "README.md"
+requires-python = ">=3.8"
+license = { text = "MIT" }
+authors = [{ name = "Taylor McRae" }]
+
+dependencies = [
+    "cffi>=1.16",
+]
+
+[project.urls]
+Homepage = "https://github.com/thetaylormcrae/yogapy"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+yogapy = ["*.dll", "*.so", "*.dylib"]
