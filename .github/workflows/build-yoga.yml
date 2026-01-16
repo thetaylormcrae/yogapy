@@ -104,7 +104,7 @@ jobs:
           name: yogapy-native-${{ matrix.os }}
           path: src/yogapy/_native/**
 
-  build-wheels:
+  build-dist:
     needs: build-yoga
     runs-on: ubuntu-latest
 
@@ -127,27 +127,25 @@ jobs:
           echo "Contents of src/yogapy/_native:"
           find src/yogapy/_native -type f -print
 
-      - name: Install Python
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
       - name: Install build tools
-        run: pip install build cibuildwheel python-semantic-release
+        run: pip install build python-semantic-release
 
-      - name: Build wheels
-        env:
-          CIBW_BUILD_VERBOSITY: 1
-        run: cibuildwheel --output-dir dist
+      - name: Build sdist and wheel
+        run: python -m build --sdist --wheel --outdir dist
 
-      - name: Upload wheels
+      - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
-          name: yogapy-wheels
+          name: yogapy-dist
           path: dist/*
 
   release:
-    needs: build-wheels
+    needs: build-dist
     runs-on: ubuntu-latest
     environment: pypi
 
@@ -160,10 +158,10 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Download wheels
+      - name: Download distributions
         uses: actions/download-artifact@v4
         with:
-          name: yogapy-wheels
+          name: yogapy-dist
           path: dist
 
       - name: Run semantic-release
