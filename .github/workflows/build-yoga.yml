@@ -22,118 +22,88 @@ jobs:
       YOGA_BUILD_DIR: yoga/build
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Install CMake (Windows)
         if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
 
-      # ---------------------------------------------------------
-      # FIXED: Force bash so Windows doesn't treat "$VAR" as empty
-      # ---------------------------------------------------------
       - name: Clone Yoga
         shell: bash
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
-      - name: Configure Yoga (shared library)
+      - name: Configure Yoga
         shell: bash
         run: |
           cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
             -DYOGA_BUILD_C=ON \
-            -DYOGA_BUILD_SHARED=ON \
-            -DYOGA_BUILD_TESTS=OFF
+            -DYOGA_BUILD_SHARED=OFF \
+            -DYOGA_BUILD_TESTS=ON
 
       - name: Build Yoga
         shell: bash
         run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
 
-      # ---------------------------------------------------------
-      # NEW: Output the actual file Yoga produced
-      # ---------------------------------------------------------
       - name: Show Yoga build outputs
         shell: bash
         run: |
           echo "=== Yoga build directory contents ==="
-          find "$YOGA_BUILD_DIR" -maxdepth 2 -type f -print
+          find "$YOGA_BUILD_DIR" -maxdepth 4 -type f -print
 
-      # ---------------------------------------------------------
-      # FIXED: Correct filenames and paths for shared libs
-      # ---------------------------------------------------------
-      - name: Copy shared library into yogapy package
+      - name: Locate Yoga library (Unix/macOS)
+        if: runner.os != 'Windows'
+        id: locate-lib-unix
+        shell: bash
+        run: |
+          LIB=$(find "$YOGA_BUILD_DIR" -maxdepth 4 -type f -name 'libyogacore.*' | head -n1)
+          if [ -z "$LIB" ]; then
+            echo "No libyogacore.* found under $YOGA_BUILD_DIR"
+            exit 1
+          fi
+          echo "Found Yoga library: $LIB"
+          echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
+
+      - name: Locate Yoga library (Windows)
+        if: runner.os == 'Windows'
+        id: locate-lib-win
+        shell: pwsh
+        run: |
+          $lib = Get-ChildItem -Path $env:YOGA_BUILD_DIR -Recurse -Include yogacore.dll,yogacore.lib | Select-Object -First 1
+          if (-not $lib) {
+            Write-Host "No yogacore.dll or yogacore.lib found under $env:YOGA_BUILD_DIR"
+            exit 1
+          }
+          Write-Host "Found Yoga library: $($lib.FullName)"
+          "yoga_lib=$($lib.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Copy Yoga library into yogapy package
         shell: bash
         run: |
           mkdir -p src/yogapy/_native
 
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
             mkdir -p src/yogapy/_native/linux
-            cp "$YOGA_BUILD_DIR/libyogacore.so" src/yogapy/_native/linux/
-            echo "Copied libyogacore.so"
+            SRC="${{ steps.locate-lib-unix.outputs.yoga_lib }}"
+            cp "$SRC" src/yogapy/_native/linux/
+            echo "Copied Yoga library: $SRC -> src/yogapy/_native/linux/"
 
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             mkdir -p src/yogapy/_native/macos
-            cp "$YOGA_BUILD_DIR/libyogacore.dylib" src/yogapy/_native/macos/
-            echo "Copied libyogacore.dylib"
+            SRC="${{ steps.locate-lib-unix.outputs.yoga_lib }}"
+            cp "$SRC" src/yogapy/_native/macos/
+            echo "Copied Yoga library: $SRC -> src/yogapy/_native/macos/"
 
           else
             mkdir -p src/yogapy/_native/windows
-            pwsh -Command "Copy-Item \"$env:YOGA_BUILD_DIR\\Release\\yogacore.dll\" \"src\\yogapy\\_native\\windows\\\""
-            echo "Copied yogacore.dll"
+            SRC="${{ steps.locate-lib-win.outputs.yoga_lib }}"
+            pwsh -Command "Copy-Item \"$SRC\" \"src\\yogapy\\_native\\windows\\\""
+            echo "Copied Yoga library: $SRC -> src/yogapy/_native/windows/"
           fi
 
-      - name: Upload native libs
+      - name: Upload Yoga native artifact
         uses: actions/upload-artifact@v4
         with:
           name: yogapy-native-${{ matrix.os }}
           path: src/yogapy/_native/**
-
-  build-wheels:
-    needs: build-yoga
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Download native libs
-        uses: actions/download-artifact@v4
-        with:
-          pattern: yogapy-native-*
-          path: src/yogapy/_native/
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install build tools
-        run: pip install build cibuildwheel
-
-      - name: Build wheels
-        run: cibuildwheel --output-dir dist
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: yogapy-wheels
-          path: dist/*
-
-  publish:
-    needs: build-wheels
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    environment: pypi
-
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: yogapy-wheels
-          path: dist
-
-      - name: Publish to PyPI via OIDC
-        uses: pypa/gh-action-pypi-publish@v1.8.10
-        with:
-          print-hash: true
