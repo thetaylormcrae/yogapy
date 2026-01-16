@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # REQUIRED for semantic-release
 
       - name: Install CMake (Windows)
         if: runner.os == 'Windows'
@@ -85,21 +87,15 @@ jobs:
 
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
             mkdir -p src/yogapy/_native/linux
-            SRC="${{ steps.locate-lib-unix.outputs.yoga_lib }}"
-            cp "$SRC" src/yogapy/_native/linux/
-            echo "Copied Yoga library: $SRC -> src/yogapy/_native/linux/"
+            cp "${{ steps.locate-lib-unix.outputs.yoga_lib }}" src/yogapy/_native/linux/
 
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             mkdir -p src/yogapy/_native/macos
-            SRC="${{ steps.locate-lib-unix.outputs.yoga_lib }}"
-            cp "$SRC" src/yogapy/_native/macos/
-            echo "Copied Yoga library: $SRC -> src/yogapy/_native/macos/"
+            cp "${{ steps.locate-lib-unix.outputs.yoga_lib }}" src/yogapy/_native/macos/
 
           else
             mkdir -p src/yogapy/_native/windows
-            SRC="${{ steps.locate-lib-win.outputs.yoga_lib }}"
-            pwsh -Command "Copy-Item \"$SRC\" \"src\\yogapy\\_native\\windows\\\""
-            echo "Copied Yoga library: $SRC -> src/yogapy/_native/windows/"
+            pwsh -Command "Copy-Item \"${{ steps.locate-lib-win.outputs.yoga_lib }}\" \"src\\yogapy\\_native\\windows\\\""
           fi
 
       - name: Upload Yoga native artifact
@@ -107,3 +103,63 @@ jobs:
         with:
           name: yogapy-native-${{ matrix.os }}
           path: src/yogapy/_native/**
+
+  build-wheels:
+    needs: build-yoga
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download native libs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: yogapy-native-*
+          path: src/yogapy/_native/
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build cibuildwheel python-semantic-release
+
+      - name: Build wheels
+        run: cibuildwheel --output-dir dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: yogapy-wheels
+          path: dist/*
+
+  release:
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download wheels
+        uses: actions/download-artifact@v4
+        with:
+          name: yogapy-wheels
+          path: dist
+
+      - name: Run semantic-release
+        run: semantic-release publish
+
+      - name: Publish to PyPI via OIDC
+        uses: pypa/gh-action-pypi-publish@v1.8.10
+        with:
+          print-hash: true
