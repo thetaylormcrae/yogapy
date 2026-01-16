@@ -14,22 +14,22 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-
+  
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
+  
       - name: Install CMake (Windows only)
         if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
-
+  
       - name: Clone Yoga
         run: |
           git clone https://github.com/facebook/yoga
           cd yoga
           git checkout main
-
-      - name: Configure Yoga
+  
+      - name: Configure Yoga (shared library)
         run: |
           cd yoga
           cmake -B build \
@@ -37,12 +37,12 @@ jobs:
             -DBUILD_SHARED_LIBS=ON \
             -DYOGA_BUILD_SHARED=ON \
             -DYOGA_BUILD_TESTS=OFF
-
+  
       - name: Build Yoga
         run: |
           cd yoga
           cmake --build build --config Release
-
+  
       - name: Copy built library
         run: |
           mkdir -p yoga-artifacts
@@ -53,7 +53,7 @@ jobs:
           else
             cp yoga/build/Release/yoga.dll yoga-artifacts/
           fi
-
+  
       - name: Upload Yoga artifact
         uses: actions/upload-artifact@v4
         with:
