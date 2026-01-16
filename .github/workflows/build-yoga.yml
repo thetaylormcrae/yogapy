@@ -121,9 +121,10 @@ jobs:
   
       - name: Move native libs into project tree
         run: |
+          echo "Moving native libs into project source tree..."
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
-          echo "Native libs now in src/yogapy/_native:"
+          echo "Contents of src/yogapy/_native:"
           find src/yogapy/_native -type f -print
   
       - name: Install Python
@@ -135,6 +136,8 @@ jobs:
         run: pip install build cibuildwheel python-semantic-release
   
       - name: Build wheels
+        env:
+          CIBW_BUILD_VERBOSITY: 1
         run: cibuildwheel --output-dir dist
   
       - name: Upload wheels
@@ -142,6 +145,7 @@ jobs:
         with:
           name: yogapy-wheels
           path: dist/*
+
 
   release:
     needs: build-wheels
