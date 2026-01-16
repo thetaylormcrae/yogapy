@@ -1,0 +1,111 @@
+name: Build Yoga + Wheels
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-yoga:
+    name: Build Yoga (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install CMake (Windows only)
+        if: runner.os == 'Windows'
+        uses: lukka/get-cmake@v3
+
+      - name: Clone Yoga
+        run: |
+          git clone https://github.com/facebook/yoga
+          cd yoga
+          git checkout master
+
+      - name: Configure Yoga
+        run: |
+          cd yoga
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build Yoga
+        run: |
+          cd yoga
+          cmake --build build --config Release
+
+      - name: Copy built library
+        run: |
+          mkdir -p yoga-artifacts
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            cp yoga/build/libyoga.so yoga-artifacts/
+          elif [ "${{ runner.os }}" = "macOS" ]; then
+            cp yoga/build/libyoga.dylib yoga-artifacts/
+          else
+            cp yoga/build/Release/yoga.dll yoga-artifacts/
+          fi
+
+      - name: Upload Yoga artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: yoga-${{ runner.os }}
+          path: yoga-artifacts/*
+
+  build-wheels:
+    name: Build Wheels (${{ matrix.os }})
+    needs: build-yoga
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Yoga artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yoga-${{ runner.os }}
+          path: src/yogapy/
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel==2.21.3
+
+      - name: Build wheels
+        run: cibuildwheel --output-dir dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ runner.os }}
+          path: dist/*
+
+  publish:
+    name: Publish to PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.8.10
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
