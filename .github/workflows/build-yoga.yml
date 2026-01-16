@@ -27,7 +27,7 @@ jobs:
 
       - name: Install CMake (Windows only)
         if: runner.os == 'Windows'
-        uses: lukka/get-cmake@v4
+        uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
