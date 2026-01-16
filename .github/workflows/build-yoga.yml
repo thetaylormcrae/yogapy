@@ -22,21 +22,16 @@ jobs:
       YOGA_BUILD_DIR: yoga/build
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0   # REQUIRED for semantic-release
+      - uses: actions/checkout@v4
 
       - name: Install CMake (Windows)
         if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
-        shell: bash
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
       - name: Configure Yoga
-        shell: bash
         run: |
           cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
@@ -45,57 +40,36 @@ jobs:
             -DYOGA_BUILD_TESTS=ON
 
       - name: Build Yoga
-        shell: bash
         run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
 
-      - name: Show Yoga build outputs
+      - name: Locate Yoga library
+        id: locate
         shell: bash
         run: |
-          echo "=== Yoga build directory contents ==="
-          find "$YOGA_BUILD_DIR" -maxdepth 4 -type f -print
+          if [[ "${{ runner.os }}" == "Windows" ]]; then
+            LIB=$(pwsh -Command "(Get-ChildItem -Recurse -Include yogacore.dll,yogacore.lib $env:YOGA_BUILD_DIR | Select-Object -First 1).FullName")
+          else
+            LIB=$(find "$YOGA_BUILD_DIR" -type f -name 'libyogacore.*' | head -n1)
+          fi
 
-      - name: Locate Yoga library (Unix/macOS)
-        if: runner.os != 'Windows'
-        id: locate-lib-unix
-        shell: bash
-        run: |
-          LIB=$(find "$YOGA_BUILD_DIR" -maxdepth 4 -type f -name 'libyogacore.*' | head -n1)
-          if [ -z "$LIB" ]; then
-            echo "No libyogacore.* found under $YOGA_BUILD_DIR"
+          if [[ -z "$LIB" ]]; then
+            echo "Yoga library not found"
             exit 1
           fi
+
           echo "Found Yoga library: $LIB"
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
-
-      - name: Locate Yoga library (Windows)
-        if: runner.os == 'Windows'
-        id: locate-lib-win
-        shell: pwsh
-        run: |
-          $lib = Get-ChildItem -Path $env:YOGA_BUILD_DIR -Recurse -Include yogacore.dll,yogacore.lib | Select-Object -First 1
-          if (-not $lib) {
-            Write-Host "No yogacore.dll or yogacore.lib found under $env:YOGA_BUILD_DIR"
-            exit 1
-          }
-          Write-Host "Found Yoga library: $($lib.FullName)"
-          "yoga_lib=$($lib.FullName)" >> $env:GITHUB_OUTPUT
 
       - name: Copy Yoga library into yogapy package
         shell: bash
         run: |
-          mkdir -p src/yogapy/_native
+          PLATFORM=$([[ "${{ runner.os }}" == "Linux" ]] && echo "linux" || ([[ "${{ runner.os }}" == "macOS" ]] && echo "macos" || echo "windows"))
+          mkdir -p src/yogapy/_native/$PLATFORM
 
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            mkdir -p src/yogapy/_native/linux
-            cp "${{ steps.locate-lib-unix.outputs.yoga_lib }}" src/yogapy/_native/linux/
-
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            mkdir -p src/yogapy/_native/macos
-            cp "${{ steps.locate-lib-unix.outputs.yoga_lib }}" src/yogapy/_native/macos/
-
+          if [[ "$PLATFORM" == "windows" ]]; then
+            pwsh -Command "Copy-Item '${{ steps.locate.outputs.yoga_lib }}' 'src/yogapy/_native/windows/'"
           else
-            mkdir -p src/yogapy/_native/windows
-            pwsh -Command "Copy-Item \"${{ steps.locate-lib-win.outputs.yoga_lib }}\" \"src\\yogapy\\_native\\windows\\\""
+            cp "${{ steps.locate.outputs.yoga_lib }}" "src/yogapy/_native/$PLATFORM/"
           fi
 
       - name: Upload Yoga native artifact
@@ -103,78 +77,76 @@ jobs:
         with:
           name: yogapy-native-${{ matrix.os }}
           path: src/yogapy/_native/**
+          if-no-files-found: error
 
   build-dist:
     needs: build-yoga
     runs-on: ubuntu-latest
-  
+
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-  
+
       - name: Download native libs
         uses: actions/download-artifact@v4
         with:
           pattern: yogapy-native-*
           path: native_libs/
-  
+
       - name: Move native libs into project tree
         run: |
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
-  
-      - name: Set up Python
+
+      - name: Set up Python + tools
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-  
-      - name: Install build tools
-        run: pip install build python-semantic-release
-  
-      - name: Run semantic-release (version bump + tag + changelog)
+
+      - run: pip install build python-semantic-release
+
+      - name: Bump version + tag (semantic-release)
         run: semantic-release version
-  
-      - name: Build sdist and wheel with NEW version
+
+      - name: Build sdist and wheel
         run: python -m build --sdist --wheel --outdir dist
-  
+
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
           name: yogapy-dist
           path: dist/*
+          if-no-files-found: error
 
   release:
     needs: build-dist
     runs-on: ubuntu-latest
     environment: pypi
-  
+
     permissions:
       id-token: write
       contents: write
-  
+
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-  
+          fetch-depth: 0   # semantic-release requires full history
+
       - name: Download distributions
         uses: actions/download-artifact@v4
         with:
           name: yogapy-dist
           path: dist
-  
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-  
-      - name: Install semantic-release
-        run: pip install python-semantic-release
-  
-      - name: Finalize release (GitHub release notes)
+
+      - run: pip install python-semantic-release
+
+      - name: Finalize GitHub release notes
         run: semantic-release publish --skip-build
-  
+
       - name: Publish to PyPI via OIDC
         uses: pypa/gh-action-pypi-publish@v1.8.10
         with:
