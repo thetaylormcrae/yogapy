@@ -28,11 +28,7 @@ jobs:
         if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
 
-      # -----------------------------
-      # FIXED: Windows variable expansion
-      # -----------------------------
       - name: Clone Yoga
-        shell: bash
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
       - name: Configure Yoga (shared library)
@@ -46,27 +42,18 @@ jobs:
       - name: Build Yoga
         run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
 
-      # -----------------------------
-      # FIXED: Correct shared library filenames
-      # libyogacore.so / libyogacore.dylib / yogacore.dll
-      # -----------------------------
       - name: Copy shared library into yogapy package
-        shell: bash
         run: |
           mkdir -p src/yogapy/_native
-
           if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
             mkdir -p src/yogapy/_native/linux
-            cp "$YOGA_BUILD_DIR/libyogacore.so" src/yogapy/_native/linux/
-
+            cp "$YOGA_BUILD_DIR/libyoga.so" src/yogapy/_native/linux/
           elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
             mkdir -p src/yogapy/_native/macos
-            cp "$YOGA_BUILD_DIR/libyogacore.dylib" src/yogapy/_native/macos/
-
+            cp "$YOGA_BUILD_DIR/libyoga.dylib" src/yogapy/_native/macos/
           else
             mkdir -p src/yogapy/_native/windows
-            # Windows uses PowerShell path syntax
-            pwsh -Command "Copy-Item \"$env:YOGA_BUILD_DIR\\Release\\yogacore.dll\" \"src\\yogapy\\_native\\windows\\\""
+            cp "$YOGA_BUILD_DIR/Release/yoga.dll" src/yogapy/_native/windows/
           fi
 
       - name: Upload native libs
