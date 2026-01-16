@@ -1,49 +1,41 @@
-name: Build Yoga
+name: Build Yoga + Wheels
 
 on:
   push:
     branches: [ main ]
   pull_request:
-    branches: [ main ]
-
-env:
-  CMAKE_BUILD_PARALLEL_LEVEL: 4
-  YOGA_REPO: https://github.com/facebook/yoga
-  YOGA_SRC_DIR: yoga
-  YOGA_BUILD_DIR: yoga/build
+  workflow_dispatch:
 
 jobs:
   build-yoga:
     name: Build Yoga (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
-
     strategy:
       fail-fast: false
       matrix:
-        os: [ ubuntu-latest, macos-15, windows-latest ]
+        os: [ubuntu-latest, windows-latest, macos-latest]
 
-    defaults:
-      run:
-        shell: bash
+    env:
+      YOGA_REPO: https://github.com/facebook/yoga
+      YOGA_SRC_DIR: yoga
+      YOGA_BUILD_DIR: yoga/build
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
 
     steps:
-      - name: Checkout yogapy
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Install CMake (Windows only)
-        if: matrix.os == 'windows-latest'
-        uses: lukka/get-cmake@latest
-        with:
-          useCloudCache: true
-          useLocalCache: false
+        if: runner.os == 'Windows'
+        uses: lukka/get-cmake@v4
 
       - name: Clone Yoga
-        run: |
-          git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
+        run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
-      - name: Configure Yoga (shared library, no tests)
+      - name: Configure Yoga
         run: |
-          cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
+          cd "$YOGA_SRC_DIR"
+          cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=ON \
             -DYOGA_BUILD_SHARED=ON \
@@ -51,34 +43,78 @@ jobs:
 
       - name: Build Yoga
         run: |
-          if [ "${{ matrix.os }}" = "windows-latest" ]; then
-            cmake --build "$YOGA_BUILD_DIR" --config Release --parallel
-          else
-            cmake --build "$YOGA_BUILD_DIR" --parallel
-          fi
+          cd "$YOGA_SRC_DIR"
+          cmake --build build --config Release --parallel 4
 
-      - name: Collect Yoga shared library
-        env:
-          OS_NAME: ${{ matrix.os }}
+      - name: Copy built library
+        shell: bash
         run: |
           mkdir -p yoga-artifacts
 
-          # Yoga’s CMake layout puts libraries under the 'yoga' subdir
-          #   - Unix:   yoga/build/yoga/libyoga.so
-          #   - macOS:  yoga/build/yoga/libyoga.dylib
-          #   - Windows: yoga/build/yoga/Release/yoga.dll
-
-          if [ "$OS_NAME" = "ubuntu-latest" ]; then
-            cp "$YOGA_BUILD_DIR/yoga/libyoga.so" yoga-artifacts/
-          elif [ "$OS_NAME" = "macos-15" ]; then
-            cp "$YOGA_BUILD_DIR/yoga/libyoga.dylib" yoga-artifacts/
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            cp "$YOGA_BUILD_DIR/libyoga.so" yoga-artifacts/
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            cp "$YOGA_BUILD_DIR/libyoga.dylib" yoga-artifacts/
           else
-            cp "$YOGA_BUILD_DIR/yoga/Release/yoga.dll" yoga-artifacts/
+            cp "$YOGA_BUILD_DIR/Release/yoga.dll" yoga-artifacts/
           fi
 
-      - name: Upload Yoga shared library artifact
+      - name: Upload Yoga artifact
         uses: actions/upload-artifact@v4
         with:
           name: yoga-${{ matrix.os }}
-          path: yoga-artifacts/
-          if-no-files-found: error
+          path: yoga-artifacts/*
+
+  build-wheels:
+    name: Build Wheels (${{ matrix.os }})
+    needs: build-yoga
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Yoga artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: yoga-${{ matrix.os }}
+          path: src/yogapy/
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install cibuildwheel
+        run: pip install cibuildwheel==2.21.3
+
+      - name: Build wheels
+        run: cibuildwheel --output-dir dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: dist/*
+
+  publish:
+    name: Publish to PyPI
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Download all wheels
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          path: dist
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.8.10
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
