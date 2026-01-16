@@ -5,6 +5,7 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   build-yoga:
@@ -19,55 +20,95 @@ jobs:
       YOGA_REPO: https://github.com/facebook/yoga
       YOGA_SRC_DIR: yoga
       YOGA_BUILD_DIR: yoga/build
-      CMAKE_BUILD_PARALLEL_LEVEL: 4
 
     steps:
-      - name: Checkout yogapy
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Install CMake (Windows only)
-        if: matrix.os == 'windows-latest'
+      - name: Install CMake (Windows)
+        if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
-        with:
-          useCloudCache: true
-          useLocalCache: false
 
       - name: Clone Yoga
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
-        shell: bash
 
-      - name: Configure Yoga (static library, no tests)
-        run: >
-          cmake
-          -S "$YOGA_SRC_DIR"
-          -B "$YOGA_BUILD_DIR"
-          -DCMAKE_BUILD_TYPE=Release
-          -DYOGA_BUILD_SHARED=OFF
-          -DYOGA_BUILD_TESTS=OFF
-        shell: bash
+      - name: Configure Yoga (shared library)
+        run: |
+          cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DYOGA_BUILD_C=ON \
+            -DYOGA_BUILD_SHARED=ON \
+            -DYOGA_BUILD_TESTS=OFF
 
       - name: Build Yoga
-        run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel $CMAKE_BUILD_PARALLEL_LEVEL
-        shell: bash
+        run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
 
-      - name: Collect Yoga library artifact (Unix/macOS)
-        if: matrix.os != 'windows-latest'
+      - name: Copy shared library into yogapy package
         run: |
-          mkdir -p yoga-artifacts
-          # Yoga builds the core static library as libyogacore.a under the 'yoga' subdir
-          cp "$YOGA_BUILD_DIR/yoga/libyogacore.a" yoga-artifacts/
-        shell: bash
+          mkdir -p src/yogapy/_native
+          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
+            mkdir -p src/yogapy/_native/linux
+            cp "$YOGA_BUILD_DIR/libyoga.so" src/yogapy/_native/linux/
+          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            mkdir -p src/yogapy/_native/macos
+            cp "$YOGA_BUILD_DIR/libyoga.dylib" src/yogapy/_native/macos/
+          else
+            mkdir -p src/yogapy/_native/windows
+            cp "$YOGA_BUILD_DIR/Release/yoga.dll" src/yogapy/_native/windows/
+          fi
 
-      - name: Collect Yoga library artifact (Windows)
-        if: matrix.os == 'windows-latest'
-        run: |
-          New-Item -ItemType Directory -Force -Path yoga-artifacts | Out-Null
-          # On Windows with the VS generator, the static lib is under yoga/Release
-          Copy-Item "$env:YOGA_BUILD_DIR\yoga\Release\yogacore.lib" -Destination "yoga-artifacts\"
-        shell: pwsh
-
-      - name: Upload Yoga library artifact
+      - name: Upload native libs
         uses: actions/upload-artifact@v4
         with:
-          name: yoga-lib-${{ matrix.os }}
-          path: yoga-artifacts/*
+          name: yogapy-native-${{ matrix.os }}
+          path: src/yogapy/_native/**
+
+  build-wheels:
+    needs: build-yoga
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download native libs
+        uses: actions/download-artifact@v4
+        with:
+          pattern: yogapy-native-*
+          path: src/yogapy/_native/
+
+      - name: Install Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build cibuildwheel
+
+      - name: Build wheels
+        run: cibuildwheel --output-dir dist
+
+      - name: Upload wheels
+        uses: actions/upload-artifact@v4
+        with:
+          name: yogapy-wheels
+          path: dist/*
+
+  publish:
+    needs: build-wheels
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    environment: pypi
+
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: yogapy-wheels
+          path: dist
+
+      - name: Publish to PyPI via OIDC
+        uses: pypa/gh-action-pypi-publish@v1.8.10
+        with:
+          print-hash: true
