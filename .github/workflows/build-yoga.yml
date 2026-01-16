@@ -5,7 +5,12 @@ on:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+
+env:
+  CMAKE_BUILD_PARALLEL_LEVEL: 4
+  YOGA_REPO: https://github.com/facebook/yoga
+  YOGA_SRC_DIR: yoga
+  YOGA_BUILD_DIR: yoga/build
 
 jobs:
   build-yoga:
@@ -15,20 +20,15 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-15, windows-latest]
+        os: [ ubuntu-latest, macos-15, windows-latest ]
 
-    env:
-      CMAKE_BUILD_PARALLEL_LEVEL: 4
-      YOGA_REPO: https://github.com/facebook/yoga
-      YOGA_SRC_DIR: yoga
-      YOGA_BUILD_DIR: yoga/build
-      OS_NAME: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout yogapy
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 1
 
       - name: Install CMake (Windows only)
         if: matrix.os == 'windows-latest'
@@ -41,69 +41,42 @@ jobs:
         run: |
           git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
-      # ---------- Configure ----------
-
-      - name: Configure Yoga (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        shell: bash
+      - name: Configure Yoga (shared library, no tests)
         run: |
-          cd "$YOGA_SRC_DIR"
-          cmake -B build \
+          cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=ON \
             -DYOGA_BUILD_SHARED=ON \
-            -DYOGA_BUILD_TESTS=OFF \
-            -DYOGA_BUILD_BENCHMARKS=OFF \
-            -DYOGA_BUILD_TOOLS=OFF
+            -DYOGA_BUILD_TESTS=OFF
 
-      - name: Configure Yoga (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
+      - name: Build Yoga
         run: |
-          cd $env:YOGA_SRC_DIR
-          cmake -B build `
-            -DCMAKE_BUILD_TYPE=Release `
-            -DBUILD_SHARED_LIBS=ON `
-            -DYOGA_BUILD_SHARED=ON `
-            -DYOGA_BUILD_TESTS=OFF `
-            -DYOGA_BUILD_BENCHMARKS=OFF `
-            -DYOGA_BUILD_TOOLS=OFF
-
-      # ---------- Build ----------
-
-      - name: Build Yoga (Linux/macOS)
-        if: matrix.os != 'windows-latest'
-        shell: bash
-        run: |
-          cd "$YOGA_SRC_DIR"
-          cmake --build build --config Release
-
-      - name: Build Yoga (Windows)
-        if: matrix.os == 'windows-latest'
-        shell: pwsh
-        run: |
-          cd $env:YOGA_SRC_DIR
-          cmake --build build --config Release -- /m
-
-      # ---------- Collect artifacts ----------
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cmake --build "$YOGA_BUILD_DIR" --config Release --parallel
+          else
+            cmake --build "$YOGA_BUILD_DIR" --parallel
+          fi
 
       - name: Collect Yoga shared library
-        shell: bash
+        env:
+          OS_NAME: ${{ matrix.os }}
         run: |
           mkdir -p yoga-artifacts
 
+          # Yoga’s CMake layout puts libraries under the 'yoga' subdir
+          #   - Unix:   yoga/build/yoga/libyoga.so
+          #   - macOS:  yoga/build/yoga/libyoga.dylib
+          #   - Windows: yoga/build/yoga/Release/yoga.dll
+
           if [ "$OS_NAME" = "ubuntu-latest" ]; then
-            # CMake puts shared libs under build/lib on Unix
-            cp "$YOGA_BUILD_DIR/lib/libyoga.so" yoga-artifacts/
+            cp "$YOGA_BUILD_DIR/yoga/libyoga.so" yoga-artifacts/
           elif [ "$OS_NAME" = "macos-15" ]; then
-            # Fix: correct path is build/lib/libyoga.dylib, not build/libyoga.dylib
-            cp "$YOGA_BUILD_DIR/lib/libyoga.dylib" yoga-artifacts/
+            cp "$YOGA_BUILD_DIR/yoga/libyoga.dylib" yoga-artifacts/
           else
-            # Visual Studio generator: DLLs under build/Release
-            cp "$YOGA_BUILD_DIR/Release/yoga.dll" yoga-artifacts/
+            cp "$YOGA_BUILD_DIR/yoga/Release/yoga.dll" yoga-artifacts/
           fi
 
-      - name: Upload Yoga artifacts
+      - name: Upload Yoga shared library artifact
         uses: actions/upload-artifact@v4
         with:
           name: yoga-${{ matrix.os }}
