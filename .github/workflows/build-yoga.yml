@@ -13,13 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    env:
-      YOGA_REPO: https://github.com/facebook/yoga
-      YOGA_SRC_DIR: yoga
-      YOGA_BUILD_DIR: yoga/build
-      CMAKE_BUILD_PARALLEL_LEVEL: 4
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -30,11 +24,14 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
-        run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
+        shell: bash
+        run: |
+          git clone --depth 1 https://github.com/facebook/yoga yoga
 
       - name: Configure Yoga
+        shell: bash
         run: |
-          cd "$YOGA_SRC_DIR"
+          cd yoga
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=ON \
@@ -42,27 +39,36 @@ jobs:
             -DYOGA_BUILD_TESTS=OFF
 
       - name: Build Yoga
+        shell: bash
         run: |
-          cd "$YOGA_SRC_DIR"
+          cd yoga
           cmake --build build --config Release --parallel 4
 
-      - name: Copy built library
+      - name: Copy built library (Linux)
+        if: runner.os == 'Linux'
         shell: bash
         run: |
           mkdir -p yoga-artifacts
+          cp yoga/build/lib/libyoga.so yoga-artifacts/
 
-          if [[ "${{ matrix.os }}" == "ubuntu-latest" ]]; then
-            cp "$YOGA_BUILD_DIR/libyoga.so" yoga-artifacts/
-          elif [[ "${{ matrix.os }}" == "macos-latest" ]]; then
-            cp "$YOGA_BUILD_DIR/libyoga.dylib" yoga-artifacts/
-          else
-            cp "$YOGA_BUILD_DIR/Release/yoga.dll" yoga-artifacts/
-          fi
+      - name: Copy built library (macOS)
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          mkdir -p yoga-artifacts
+          cp yoga/build/lib/libyoga.dylib yoga-artifacts/
+
+      - name: Copy built library (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path yoga-artifacts | Out-Null
+          Copy-Item yoga/build/bin/Release/yoga.dll yoga-artifacts/
 
       - name: Upload Yoga artifact
         uses: actions/upload-artifact@v4
         with:
-          name: yoga-${{ matrix.os }}
+          name: yoga-${{ runner.os }}
           path: yoga-artifacts/*
 
   build-wheels:
@@ -72,7 +78,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
 
     steps:
       - name: Checkout
@@ -81,7 +87,7 @@ jobs:
       - name: Download Yoga artifact
         uses: actions/download-artifact@v4
         with:
-          name: yoga-${{ matrix.os }}
+          name: yoga-${{ runner.os }}
           path: src/yogapy/
 
       - name: Install Python
@@ -98,7 +104,7 @@ jobs:
       - name: Upload wheels
         uses: actions/upload-artifact@v4
         with:
-          name: wheels-${{ matrix.os }}
+          name: wheels-${{ runner.os }}
           path: dist/*
 
   publish:
