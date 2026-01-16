@@ -1,115 +1,111 @@
-name: Build Yoga + Wheels
+name: Build Yoga
 
 on:
   push:
     branches: [ main ]
   pull_request:
+    branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-yoga:
     name: Build Yoga (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-  
+        os: [ubuntu-latest, macos-15, windows-latest]
+
+    env:
+      CMAKE_BUILD_PARALLEL_LEVEL: 4
+      YOGA_REPO: https://github.com/facebook/yoga
+      YOGA_SRC_DIR: yoga
+      YOGA_BUILD_DIR: yoga/build
+      OS_NAME: ${{ matrix.os }}
+
     steps:
-      - name: Checkout
+      - name: Checkout yogapy
         uses: actions/checkout@v4
-  
+        with:
+          fetch-depth: 1
+
       - name: Install CMake (Windows only)
-        if: runner.os == 'Windows'
+        if: matrix.os == 'windows-latest'
         uses: lukka/get-cmake@latest
-  
+        with:
+          useCloudCache: true
+          useLocalCache: false
+
       - name: Clone Yoga
         run: |
-          git clone https://github.com/facebook/yoga
-          cd yoga
-          git checkout main
-  
-      - name: Configure Yoga (shared library)
+          git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
+
+      # ---------- Configure ----------
+
+      - name: Configure Yoga (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
         run: |
-          cd yoga
+          cd "$YOGA_SRC_DIR"
           cmake -B build \
             -DCMAKE_BUILD_TYPE=Release \
             -DBUILD_SHARED_LIBS=ON \
             -DYOGA_BUILD_SHARED=ON \
-            -DYOGA_BUILD_TESTS=OFF
-  
-      - name: Build Yoga
+            -DYOGA_BUILD_TESTS=OFF \
+            -DYOGA_BUILD_BENCHMARKS=OFF \
+            -DYOGA_BUILD_TOOLS=OFF
+
+      - name: Configure Yoga (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
         run: |
-          cd yoga
+          cd $env:YOGA_SRC_DIR
+          cmake -B build `
+            -DCMAKE_BUILD_TYPE=Release `
+            -DBUILD_SHARED_LIBS=ON `
+            -DYOGA_BUILD_SHARED=ON `
+            -DYOGA_BUILD_TESTS=OFF `
+            -DYOGA_BUILD_BENCHMARKS=OFF `
+            -DYOGA_BUILD_TOOLS=OFF
+
+      # ---------- Build ----------
+
+      - name: Build Yoga (Linux/macOS)
+        if: matrix.os != 'windows-latest'
+        shell: bash
+        run: |
+          cd "$YOGA_SRC_DIR"
           cmake --build build --config Release
-  
-      - name: Copy built library
+
+      - name: Build Yoga (Windows)
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          cd $env:YOGA_SRC_DIR
+          cmake --build build --config Release -- /m
+
+      # ---------- Collect artifacts ----------
+
+      - name: Collect Yoga shared library
+        shell: bash
         run: |
           mkdir -p yoga-artifacts
-          if [ "${{ runner.os }}" = "Linux" ]; then
-            cp yoga/build/libyoga.so yoga-artifacts/
-          elif [ "${{ runner.os }}" = "macOS" ]; then
-            cp yoga/build/libyoga.dylib yoga-artifacts/
+
+          if [ "$OS_NAME" = "ubuntu-latest" ]; then
+            # CMake puts shared libs under build/lib on Unix
+            cp "$YOGA_BUILD_DIR/lib/libyoga.so" yoga-artifacts/
+          elif [ "$OS_NAME" = "macos-15" ]; then
+            # Fix: correct path is build/lib/libyoga.dylib, not build/libyoga.dylib
+            cp "$YOGA_BUILD_DIR/lib/libyoga.dylib" yoga-artifacts/
           else
-            cp yoga/build/Release/yoga.dll yoga-artifacts/
+            # Visual Studio generator: DLLs under build/Release
+            cp "$YOGA_BUILD_DIR/Release/yoga.dll" yoga-artifacts/
           fi
-  
-      - name: Upload Yoga artifact
+
+      - name: Upload Yoga artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: yoga-${{ runner.os }}
-          path: yoga-artifacts/*
-
-  build-wheels:
-    name: Build Wheels (${{ matrix.os }})
-    needs: build-yoga
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download Yoga artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: yoga-${{ runner.os }}
-          path: src/yogapy/
-
-      - name: Install Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install cibuildwheel
-        run: pip install cibuildwheel==2.21.3
-
-      - name: Build wheels
-        run: cibuildwheel --output-dir dist
-
-      - name: Upload wheels
-        uses: actions/upload-artifact@v4
-        with:
-          name: wheels-${{ runner.os }}
-          path: dist/*
-
-  publish:
-    name: Publish to PyPI
-    needs: build-wheels
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-
-    steps:
-      - name: Download all wheels
-        uses: actions/download-artifact@v4
-        with:
-          pattern: wheels-*
-          path: dist
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@v1.8.10
-        with:
-          password: ${{ secrets.PYPI_API_TOKEN }}
+          name: yoga-${{ matrix.os }}
+          path: yoga-artifacts/
+          if-no-files-found: error
