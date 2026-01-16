@@ -107,37 +107,37 @@ jobs:
   build-dist:
     needs: build-yoga
     runs-on: ubuntu-latest
-
+  
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
+  
       - name: Download native libs
         uses: actions/download-artifact@v4
         with:
           pattern: yogapy-native-*
           path: native_libs/
-
+  
       - name: Move native libs into project tree
         run: |
-          echo "Moving native libs into project source tree..."
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
-          echo "Contents of src/yogapy/_native:"
-          find src/yogapy/_native -type f -print
-
+  
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
+  
       - name: Install build tools
         run: pip install build python-semantic-release
-
-      - name: Build sdist and wheel
+  
+      - name: Run semantic-release (version bump + tag + changelog)
+        run: semantic-release version
+  
+      - name: Build sdist and wheel with NEW version
         run: python -m build --sdist --wheel --outdir dist
-
+  
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
@@ -172,11 +172,10 @@ jobs:
       - name: Install semantic-release
         run: pip install python-semantic-release
   
-      - name: Run semantic-release
-        run: semantic-release publish
+      - name: Finalize release (GitHub release notes)
+        run: semantic-release publish --skip-build
   
       - name: Publish to PyPI via OIDC
         uses: pypa/gh-action-pypi-publish@v1.8.10
         with:
           print-hash: true
-
