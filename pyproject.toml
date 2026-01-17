@@ -24,8 +24,13 @@ package-dir = {"" = "src"}
 [tool.setuptools.packages.find]
 where = ["src"]
 
+# FIX 1: Read the variable, not the whole file
 [tool.setuptools.dynamic]
-version = { file = "src/yogapy/version.py" }
+version = { attr = "yogapy.version.__version__" }
+
+# FIX 2: Explicitly include the compiled artifacts
+[tool.setuptools.package-data]
+"yogapy" = ["_native/**/*"]
 
 [tool.semantic_release]
 version_source = "variable"
