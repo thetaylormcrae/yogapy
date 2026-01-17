@@ -29,9 +29,11 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
+        shell: bash
         run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
 
       - name: Configure Yoga
+        shell: bash
         run: |
           cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
             -DCMAKE_BUILD_TYPE=Release \
@@ -40,6 +42,7 @@ jobs:
             -DYOGA_BUILD_TESTS=ON
 
       - name: Build Yoga
+        shell: bash
         run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
 
       - name: Locate Yoga library
@@ -63,7 +66,12 @@ jobs:
       - name: Copy Yoga library into yogapy package
         shell: bash
         run: |
-          PLATFORM=$([[ "${{ runner.os }}" == "Linux" ]] && echo "linux" || ([[ "${{ runner.os }}" == "macOS" ]] && echo "macos" || echo "windows"))
+          case "${{ runner.os }}" in
+            Linux)   PLATFORM="linux" ;;
+            macOS)   PLATFORM="macos" ;;
+            Windows) PLATFORM="windows" ;;
+          esac
+
           mkdir -p src/yogapy/_native/$PLATFORM
 
           if [[ "$PLATFORM" == "windows" ]]; then
