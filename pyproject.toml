@@ -11,13 +11,19 @@ authors = [{ name = "Taylor McRae" }]
 requires-python = ">=3.10"
 
 [tool.cibuildwheel]
-# Skip Python 3.9 and older, and skip PyPy (which struggles with C++ extensions)
 skip = "cp36-* cp37-* cp38-* cp39-* pp*"
+
+# This is the critical addition:
+# It forces the manylinux image to use GCC 12 instead of GCC 10
+[tool.cibuildwheel.linux]
+before-all = "yum install -y devtoolset-12 && source /opt/rh/devtoolset-12/enable"
+environment = { CC="/opt/rh/devtoolset-12/root/usr/bin/gcc", CXX="/opt/rh/devtoolset-12/root/usr/bin/g++" }
 
 [tool.scikit-build]
 cmake.args = [
+    "-DCMAKE_CXX_STANDARD=20",
+    "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
     "-DYOGA_BUILD_C=ON",
-    "-DYOGA_BUILD_SHARED=OFF",
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 ]
 wheel.install-dir = "yogapy"
