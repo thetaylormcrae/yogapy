@@ -49,19 +49,16 @@ jobs:
         id: locate
         shell: bash
         run: |
-          if [[ "${{ runner.os }}" == "Windows" ]]; then
-            LIB=$(pwsh -Command "(Get-ChildItem -Recurse -Include yogacore.dll,yogacore.lib $env:YOGA_BUILD_DIR | Select-Object -First 1).FullName")
-          else
-            LIB=$(find "$YOGA_BUILD_DIR" -type f -name 'libyogacore.*' | head -n1)
-          fi
-
+          LIB=$(find "$YOGA_BUILD_DIR" -type f -regex '.*yogacore\..*' | head -n1)
+      
           if [[ -z "$LIB" ]]; then
             echo "Yoga library not found"
             exit 1
           fi
-
+      
           echo "Found Yoga library: $LIB"
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
+
 
       - name: Copy Yoga library into yogapy package
         shell: bash
