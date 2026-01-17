@@ -156,7 +156,7 @@ jobs:
       - name: Finalize GitHub release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release publish --skip-build
+        run: semantic-release publish
 
       - name: Publish to PyPI via OIDC
         uses: pypa/gh-action-pypi-publish@v1.8.10
