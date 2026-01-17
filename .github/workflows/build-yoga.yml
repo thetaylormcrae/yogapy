@@ -140,4 +140,92 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build
+      - name: Install build + semantic-release
+        shell: bash
+        run: pip install build python-semantic-release
+
+      - name: Run semantic-release version bump
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== RUNNING SEMANTIC-RELEASE VERSION ==="
+          semantic-release version
+
+      - name: Refresh checkout after version bump
+        shell: bash
+        run: |
+          echo "=== REFRESHING CHECKOUT ==="
+          git fetch --tags
+          git pull --rebase
+          echo "=== VERSION.PY AFTER SEMANTIC-RELEASE ==="
+          cat src/yogapy/version.py
+
+      - name: Build sdist and wheel
+        shell: bash
+        run: |
+          echo "=== BUILDING WHEEL ==="
+          python -m build --sdist --wheel --outdir dist
+          echo "=== DIST TREE ==="
+          ls -R dist
+
+      - name: Debug wheel metadata
+        shell: bash
+        run: |
+          echo "=== WHEEL METADATA ==="
+          unzip -p dist/*.whl "*/METADATA" || true
+
+      - name: Upload distributions
+        uses: actions/upload-artifact@v4
+        with:
+          name: yogapy-dist
+          path: dist/*
+          if-no-files-found: error
+
+  release:
+    needs: build-dist
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    permissions:
+      id-token: write
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Download distributions
+        uses: actions/download-artifact@v4
+        with:
+          name: yogapy-dist
+          path: dist
+
+      - name: Debug dist contents
+        shell: bash
+        run: |
+          echo "=== DIST CONTENTS ==="
+          ls -R dist
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install semantic-release
+        shell: bash
+        run: pip install python-semantic-release
+
+      - name: Finalize GitHub release notes
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "=== RUNNING SEMANTIC-RELEASE PUBLISH ==="
+          semantic-release publish
+
+      - name: Publish to PyPI via OIDC
+        uses: pypa/gh-action-pypi-publish@v1.8.10
+        with:
+          print-hash: true
