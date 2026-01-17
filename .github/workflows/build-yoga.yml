@@ -8,9 +8,11 @@ on:
   workflow_dispatch:
 
 jobs:
+
   build-yoga:
     name: Build Yoga (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -19,7 +21,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug: workspace root
+      - name: Debug workspace root
         run: |
           echo "=== WORKSPACE ROOT ==="
           pwd
@@ -32,7 +34,7 @@ jobs:
       - name: Clone Yoga
         run: git clone --depth 1 https://github.com/facebook/yoga yoga
 
-      - name: Debug: Yoga source tree
+      - name: Debug Yoga tree
         run: |
           echo "=== YOGA TREE ==="
           ls -R yoga
@@ -53,7 +55,7 @@ jobs:
         shell: bash
         run: |
           echo "=== SEARCHING FOR YOGA LIB ==="
-          find yoga/build -type f -maxdepth 4
+          find yoga/build -type f
           LIB=$(find yoga/build -type f -regex '.*yogacore\..*' | head -n1)
           echo "FOUND: $LIB"
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
@@ -95,7 +97,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Debug: workspace root
+      - name: Debug workspace root
         run: |
           echo "=== WORKSPACE ROOT ==="
           pwd
@@ -107,7 +109,7 @@ jobs:
           pattern: yogapy-native-*
           path: native_libs/
 
-      - name: Debug: native libs
+      - name: Debug native libs
         run: |
           echo "=== NATIVE LIBS DOWNLOADED ==="
           ls -R native_libs
@@ -119,7 +121,7 @@ jobs:
           echo "=== PACKAGE TREE AFTER NATIVE LIB COPY ==="
           ls -R src/yogapy
 
-      - name: Debug: version.py content
+      - name: Debug version.py content
         run: |
           echo "=== VERSION.PY CONTENT ==="
           cat src/yogapy/version.py
@@ -132,7 +134,7 @@ jobs:
       - name: Install build + semantic-release
         run: pip install build python-semantic-release
 
-      - name: Bump version (semantic-release)
+      - name: Run semantic-release version bump
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -154,10 +156,10 @@ jobs:
           echo "=== DIST TREE ==="
           ls -R dist
 
-      - name: Debug: wheel metadata
+      - name: Debug wheel metadata
         run: |
           echo "=== WHEEL METADATA ==="
-          unzip -p dist/*.whl "yogapy-*/METADATA" || true
+          unzip -p dist/*.whl "*/METADATA" || true
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
@@ -186,7 +188,7 @@ jobs:
           name: yogapy-dist
           path: dist
 
-      - name: Debug: dist contents
+      - name: Debug dist contents
         run: |
           echo "=== DIST CONTENTS ==="
           ls -R dist
