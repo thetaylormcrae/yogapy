@@ -8,26 +8,24 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 [tool.scikit-build]
+# GOTCHA FIX: Removed 'wheel.expand' which was causing the sdist error.
+# We use 'search' to tell scikit-build where to find the compiled module.
 cmake.args = [
     "-DCMAKE_CXX_STANDARD=20",
     "-DYOGA_BUILD_C=ON",
     "-DBUILD_TESTING=OFF"
 ]
-wheel.expand = true
-wheel.install-dir = "yogapy"
 
 [tool.cibuildwheel]
 skip = "cp36-* cp37-* cp38-* cp39-* pp*"
 
-# GOTCHA FIX: Stop using 'before-all' hacks. 
-# manylinux_2_28 has GCC 12/13 baked in.
+# FIX for Linux: Force the modern image to avoid the 'yum' and 'bit_cast' errors
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 
 [tool.cibuildwheel.linux]
-# Build for standard PC and Raspberry Pi 4/5
 archs = ["x86_64", "aarch64"]
+# Remove any 'before-all' or 'environment' hacks—they aren't needed on 2_28
 
 [tool.cibuildwheel.macos]
-# Unlocks C++20 stability on Apple
 environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
