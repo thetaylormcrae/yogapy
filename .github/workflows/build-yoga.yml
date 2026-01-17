@@ -79,7 +79,6 @@ jobs:
           esac
 
           mkdir -p src/yogapy/_native/$PLATFORM
-
           cp "${{ steps.locate.outputs.yoga_lib }}" "src/yogapy/_native/$PLATFORM/"
 
           echo "=== NATIVE LIB TREE ==="
