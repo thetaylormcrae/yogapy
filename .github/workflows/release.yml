@@ -1,0 +1,79 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build_wheels:
+    name: Build wheels on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        if: runner.os == 'Linux'
+        uses: docker/setup-qemu-action@v3
+        with:
+          platforms: all
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21.3
+        env:
+          CIBW_SKIP: "cp36-* cp37-* cp38-* pp*"
+          CIBW_ARCHS_LINUX: "x86_64 aarch64" # Crucial for Raspberry Pi e-ink drivers
+          CIBW_ARCHS_MACOS: "x86_64 arm64 universal2"
+          CIBW_CONFIG_SETTINGS: "cmake.define.YOGA_BUILD_C=ON cmake.define.YOGA_BUILD_SHARED=OFF"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}-${{ strategy.job-index }}
+          path: ./wheelhouse/*.whl
+
+  build_sdist:
+    name: Build source distribution
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build sdist
+        run: pipx run build --sdist
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  publish:
+    name: Publish to PyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-latest
+    # Only run this job if a version tag (v0.1.0) is pushed
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    
+    environment:
+      name: pypi
+      url: https://pypi.org/p/yogapy
+
+    permissions:
+      id-token: write  # Required for Trusted Publishing
+      contents: read
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: '*'
+          path: dist
+          merge-multiple: true
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@v1.12.4
+        with:
+          print-hash: true
