@@ -16,52 +16,51 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
 
-    env:
-      YOGA_REPO: https://github.com/facebook/yoga
-      YOGA_SRC_DIR: yoga
-      YOGA_BUILD_DIR: yoga/build
-
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug: workspace root
+        run: |
+          echo "=== WORKSPACE ROOT ==="
+          pwd
+          ls -R .
 
       - name: Install CMake (Windows)
         if: runner.os == 'Windows'
         uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
-        shell: bash
-        run: git clone --depth 1 "$YOGA_REPO" "$YOGA_SRC_DIR"
+        run: git clone --depth 1 https://github.com/facebook/yoga yoga
+
+      - name: Debug: Yoga source tree
+        run: |
+          echo "=== YOGA TREE ==="
+          ls -R yoga
 
       - name: Configure Yoga
-        shell: bash
         run: |
-          cmake -S "$YOGA_SRC_DIR" -B "$YOGA_BUILD_DIR" \
+          cmake -S yoga -B yoga/build \
             -DCMAKE_BUILD_TYPE=Release \
             -DYOGA_BUILD_C=ON \
             -DYOGA_BUILD_SHARED=OFF \
             -DYOGA_BUILD_TESTS=ON
 
       - name: Build Yoga
-        shell: bash
-        run: cmake --build "$YOGA_BUILD_DIR" --config Release --parallel 4
+        run: cmake --build yoga/build --config Release --parallel 4
 
       - name: Locate Yoga library
         id: locate
         shell: bash
         run: |
-          LIB=$(find "$YOGA_BUILD_DIR" -type f -regex '.*yogacore\..*' | head -n1)
-
-          if [[ -z "$LIB" ]]; then
-            echo "Yoga library not found"
-            exit 1
-          fi
-
-          echo "Found Yoga library: $LIB"
+          echo "=== SEARCHING FOR YOGA LIB ==="
+          find yoga/build -type f -maxdepth 4
+          LIB=$(find yoga/build -type f -regex '.*yogacore\..*' | head -n1)
+          echo "FOUND: $LIB"
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
 
-      - name: Copy Yoga library into yogapy package
-        shell: bash
+      - name: Copy Yoga library into package
         run: |
+          echo "=== COPYING NATIVE LIB ==="
           case "${{ runner.os }}" in
             Linux)   PLATFORM="linux" ;;
             macOS)   PLATFORM="macos" ;;
@@ -76,6 +75,9 @@ jobs:
             cp "${{ steps.locate.outputs.yoga_lib }}" "src/yogapy/_native/$PLATFORM/"
           fi
 
+          echo "=== NATIVE LIB TREE ==="
+          ls -R src/yogapy/_native
+
       - name: Upload Yoga native artifact
         uses: actions/upload-artifact@v4
         with:
@@ -88,10 +90,16 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      contents: write   # REQUIRED for semantic-release to push tags + commits
+      contents: write
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Debug: workspace root
+        run: |
+          echo "=== WORKSPACE ROOT ==="
+          pwd
+          ls -R .
 
       - name: Download native libs
         uses: actions/download-artifact@v4
@@ -99,30 +107,57 @@ jobs:
           pattern: yogapy-native-*
           path: native_libs/
 
+      - name: Debug: native libs
+        run: |
+          echo "=== NATIVE LIBS DOWNLOADED ==="
+          ls -R native_libs
+
       - name: Move native libs into project tree
         run: |
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
+          echo "=== PACKAGE TREE AFTER NATIVE LIB COPY ==="
+          ls -R src/yogapy
 
-      - name: Set up Python + tools
+      - name: Debug: version.py content
+        run: |
+          echo "=== VERSION.PY CONTENT ==="
+          cat src/yogapy/version.py
+
+      - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: pip install build python-semantic-release
+      - name: Install build + semantic-release
+        run: pip install build python-semantic-release
 
-      - name: Bump version + tag (semantic-release)
+      - name: Bump version (semantic-release)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release version
+        run: |
+          echo "=== RUNNING SEMANTIC-RELEASE VERSION ==="
+          semantic-release version
 
       - name: Refresh checkout after version bump
         run: |
+          echo "=== REFRESHING CHECKOUT ==="
           git fetch --tags
           git pull --rebase
+          echo "=== VERSION.PY AFTER SEMANTIC-RELEASE ==="
+          cat src/yogapy/version.py
 
       - name: Build sdist and wheel
-        run: python -m build --sdist --wheel --outdir dist
+        run: |
+          echo "=== BUILDING WHEEL ==="
+          python -m build --sdist --wheel --outdir dist
+          echo "=== DIST TREE ==="
+          ls -R dist
+
+      - name: Debug: wheel metadata
+        run: |
+          echo "=== WHEEL METADATA ==="
+          unzip -p dist/*.whl "yogapy-*/METADATA" || true
 
       - name: Upload distributions
         uses: actions/upload-artifact@v4
@@ -143,7 +178,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # semantic-release requires full history
+          fetch-depth: 0
 
       - name: Download distributions
         uses: actions/download-artifact@v4
@@ -151,17 +186,25 @@ jobs:
           name: yogapy-dist
           path: dist
 
+      - name: Debug: dist contents
+        run: |
+          echo "=== DIST CONTENTS ==="
+          ls -R dist
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - run: pip install python-semantic-release
+      - name: Install semantic-release
+        run: pip install python-semantic-release
 
       - name: Finalize GitHub release notes
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: semantic-release publish
+        run: |
+          echo "=== RUNNING SEMANTIC-RELEASE PUBLISH ==="
+          semantic-release publish
 
       - name: Publish to PyPI via OIDC
         uses: pypa/gh-action-pypi-publish@v1.8.10
