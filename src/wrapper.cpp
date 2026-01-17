@@ -4,43 +4,37 @@
 namespace py = pybind11;
 using namespace pybind11::literals;
 
-// 1. Define a dummy struct to act as our Python handle.
-// This solves the "incomplete type" error permanently.
-struct Node {};
+// The "Magic Bullet": Define an empty struct. 
+// This prevents every single "incomplete type" error on macOS and Windows.
+struct PyNode {}; 
 
 PYBIND11_MODULE(_native, m) {
-    m.doc() = "Native Yoga Layout Engine";
-
-    // 2. Bind the dummy struct. We use 'YGNode*' as the underlying pointer.
-    py::class_<Node>(m, "Node")
+    py::class_<PyNode>(m, "Node")
         .def(py::init([]() { 
-            return reinterpret_cast<Node*>(YGNodeNew()); 
+            return reinterpret_cast<PyNode*>(YGNodeNew()); 
         }))
-        .def("__del__", [](Node* n) { 
+        .def("__del__", [](PyNode* n) { 
             YGNodeFree(reinterpret_cast<YGNode*>(n)); 
         })
-        
-        .def("calculate_layout", [](Node* n, float width, float height) {
-            YGNodeCalculateLayout(reinterpret_cast<YGNode*>(n), width, height, YGDirectionLTR);
+        .def("calculate_layout", [](PyNode* n, float w, float h) {
+            YGNodeCalculateLayout(reinterpret_cast<YGNode*>(n), w, h, YGDirectionLTR);
         })
-
-        .def("insert_child", [](Node* n, Node* child, unsigned int index) {
-            YGNodeInsertChild(reinterpret_cast<YGNode*>(n), reinterpret_cast<YGNode*>(child), index);
+        .def("set_width", [](PyNode* n, float w) { 
+            YGNodeStyleSetWidth(reinterpret_cast<YGNode*>(n), w); 
         })
-
-        .def("set_width", [](Node* n, float w) { YGNodeStyleSetWidth(reinterpret_cast<YGNode*>(n), w); })
-        .def("set_height", [](Node* n, float h) { YGNodeStyleSetHeight(reinterpret_cast<YGNode*>(n), h); })
-        
-        .def("get_layout", [](Node* n) {
+        .def("set_height", [](PyNode* n, float h) { 
+            YGNodeStyleSetHeight(reinterpret_cast<YGNode*>(n), h); 
+        })
+        .def("insert_child", [](PyNode* n, PyNode* c, int i) {
+            YGNodeInsertChild(reinterpret_cast<YGNode*>(n), reinterpret_cast<YGNode*>(c), i);
+        })
+        .def("get_layout", [](PyNode* n) {
             auto yn = reinterpret_cast<YGNode*>(n);
             return py::dict(
-                "left"_a   = YGNodeLayoutGetLeft(yn),
-                "top"_a    = YGNodeLayoutGetTop(yn),
-                "width"_a  = YGNodeLayoutGetWidth(yn),
+                "left"_a = YGNodeLayoutGetLeft(yn),
+                "top"_a = YGNodeLayoutGetTop(yn),
+                "width"_a = YGNodeLayoutGetWidth(yn),
                 "height"_a = YGNodeLayoutGetHeight(yn)
             );
         });
-
-    m.attr("DIRECTION_COLUMN") = 1;
-    m.attr("DIRECTION_ROW") = 2;
 }
