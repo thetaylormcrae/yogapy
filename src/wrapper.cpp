@@ -4,8 +4,8 @@
 namespace py = pybind11;
 using namespace pybind11::literals;
 
-// The "Magic Bullet": Define an empty struct. 
-// This prevents every single "incomplete type" error on macOS and Windows.
+// GOTCHA FIX: Yoga hides its internal struct. 
+// We define this empty tag to satisfy the compiler's need for a "Complete Type".
 struct PyNode {}; 
 
 PYBIND11_MODULE(_native, m) {
