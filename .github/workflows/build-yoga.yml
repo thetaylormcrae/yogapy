@@ -146,7 +146,7 @@ jobs:
       - name: Run semantic-release version bump
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "=== RUNNING SEMANTIC-RELEASE VERSION ==="
           semantic-release version
@@ -219,7 +219,7 @@ jobs:
       - name: Finalize GitHub release notes
         shell: bash
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           echo "=== RUNNING SEMANTIC-RELEASE PUBLISH ==="
           semantic-release publish
