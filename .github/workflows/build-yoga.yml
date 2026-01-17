@@ -116,6 +116,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release version
 
+      - name: Refresh checkout after version bump
+        run: |
+          git fetch --tags
+          git pull --rebase
+
       - name: Build sdist and wheel
         run: python -m build --sdist --wheel --outdir dist
 
