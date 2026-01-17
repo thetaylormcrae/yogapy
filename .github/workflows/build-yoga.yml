@@ -50,15 +50,14 @@ jobs:
         shell: bash
         run: |
           LIB=$(find "$YOGA_BUILD_DIR" -type f -regex '.*yogacore\..*' | head -n1)
-      
+
           if [[ -z "$LIB" ]]; then
             echo "Yoga library not found"
             exit 1
           fi
-      
+
           echo "Found Yoga library: $LIB"
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
-
 
       - name: Copy Yoga library into yogapy package
         shell: bash
@@ -87,44 +86,45 @@ jobs:
   build-dist:
     needs: build-yoga
     runs-on: ubuntu-latest
-  
+
     permissions:
       contents: write   # REQUIRED for semantic-release to push tags + commits
-  
+
     steps:
       - uses: actions/checkout@v4
-  
+
       - name: Download native libs
         uses: actions/download-artifact@v4
         with:
           pattern: yogapy-native-*
           path: native_libs/
-  
+
       - name: Move native libs into project tree
         run: |
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
-  
+
       - name: Set up Python + tools
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-  
+
       - run: pip install build python-semantic-release
-  
+
       - name: Bump version + tag (semantic-release)
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release version
-  
+
       - name: Build sdist and wheel
         run: python -m build --sdist --wheel --outdir dist
-  
+
       - name: Upload distributions
         uses: actions/upload-artifact@v4
         with:
           name: yogapy-dist
           path: dist/*
           if-no-files-found: error
-
 
   release:
     needs: build-dist
@@ -154,6 +154,8 @@ jobs:
       - run: pip install python-semantic-release
 
       - name: Finalize GitHub release notes
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: semantic-release publish --skip-build
 
       - name: Publish to PyPI via OIDC
