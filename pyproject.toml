@@ -1,6 +1,5 @@
 [project]
 name = "yogapy"
-version = "0.1.0"
 description = "Python bindings for Facebook Yoga with bundled native libraries"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -24,6 +23,10 @@ yogapy = [
     "_native/macos/*",
     "_native/windows/*",
 ]
+
+# Tell setuptools to read the version from your version.py file
+[tool.setuptools.dynamic]
+version = { attr = "yogapy.version.__version__" }
 
 [tool.semantic_release]
 version_variable = "src/yogapy/version.py:__version__"
