@@ -1,29 +1,48 @@
 [build-system]
-requires = ["scikit-build-core", "pybind11"]
+# This section is mandatory to tell pip how to build your C++ extension
+requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "yogapy"
 version = "0.1.0"
-description = "Fast Yoga layout engine for e-ink displays"
+description = "Native Yoga layout engine for Raspberry Pi E-Ink displays"
 readme = "README.md"
-authors = [{ name = "Taylor McRae" }]
 requires-python = ">=3.10"
-
-[tool.cibuildwheel]
-skip = "cp36-* cp37-* cp38-* cp39-* pp*"
-
-# This is the critical addition:
-# It forces the manylinux image to use GCC 12 instead of GCC 10
-[tool.cibuildwheel.linux]
-before-all = "yum install -y devtoolset-12 && source /opt/rh/devtoolset-12/enable"
-environment = { CC="/opt/rh/devtoolset-12/root/usr/bin/gcc", CXX="/opt/rh/devtoolset-12/root/usr/bin/g++" }
+authors = [
+    {name = "Your Name"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: C++",
+    "Topic :: Multimedia :: Graphics",
+]
 
 [tool.scikit-build]
+# Standardizes the build across all platforms
 cmake.args = [
     "-DCMAKE_CXX_STANDARD=20",
     "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
     "-DYOGA_BUILD_C=ON",
-    "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
+    "-DBUILD_TESTING=OFF"
 ]
+# This ensures the compiled .so or .pyd file ends up inside your package folder
+wheel.expand = true
 wheel.install-dir = "yogapy"
+
+[tool.cibuildwheel]
+# Drops legacy Python versions that don't support C++20 well
+skip = "cp36-* cp37-* cp38-* cp39-* pp*"
+
+# FIX for Linux 'bit_cast' error: 
+# Uses AlmaLinux 8 based image which has GCC 12+
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+# Ensures we target a modern enough SDK for C++20 features
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+
+[tool.cibuildwheel.linux]
+# This ensures we build for both Pi 4/5 (aarch64) and older Pi/Zero (armv7l)
+archs = ["x86_64", "aarch64", "armv7l"]
