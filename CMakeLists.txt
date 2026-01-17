@@ -20,4 +20,6 @@ FetchContent_MakeAvailable(yoga_src)
 find_package(pybind11 REQUIRED)
 pybind11_add_module(_native src/wrapper.cpp)
 target_link_libraries(_native PRIVATE yogacore)
+# This tells scikit-build-core to actually put the file in the wheel
+install(TARGETS _native DESTINATION yogapy)
 target_include_directories(_native PRIVATE ${yoga_src_SOURCE_DIR})
