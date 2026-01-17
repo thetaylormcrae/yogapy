@@ -11,7 +11,7 @@ FetchContent_Declare(
   GIT_TAG        v3.1.0
 )
 
-# Suppress Yoga's internal testing/benchmarking to avoid build bloat
+# GOTCHA FIX: Disable testing to avoid sub-dependency hell
 set(YOGA_BUILD_C ON CACHE BOOL "" FORCE)
 set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
 
