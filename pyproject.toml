@@ -1,48 +1,33 @@
 [build-system]
-# This section is mandatory to tell pip how to build your C++ extension
 requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
 build-backend = "scikit_build_core.build"
 
 [project]
 name = "yogapy"
 version = "0.1.0"
-description = "Native Yoga layout engine for Raspberry Pi E-Ink displays"
-readme = "README.md"
 requires-python = ">=3.10"
-authors = [
-    {name = "Your Name"}
-]
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Programming Language :: C++",
-    "Topic :: Multimedia :: Graphics",
-]
 
 [tool.scikit-build]
-# Standardizes the build across all platforms
 cmake.args = [
     "-DCMAKE_CXX_STANDARD=20",
-    "-DCMAKE_CXX_STANDARD_REQUIRED=ON",
     "-DYOGA_BUILD_C=ON",
     "-DBUILD_TESTING=OFF"
 ]
-# This ensures the compiled .so or .pyd file ends up inside your package folder
 wheel.expand = true
 wheel.install-dir = "yogapy"
 
 [tool.cibuildwheel]
-# Drops legacy Python versions that don't support C++20 well
 skip = "cp36-* cp37-* cp38-* cp39-* pp*"
 
-# FIX for Linux 'bit_cast' error: 
-# Uses AlmaLinux 8 based image which has GCC 12+
+# GOTCHA FIX: Stop using 'before-all' hacks. 
+# manylinux_2_28 has GCC 12/13 baked in.
 manylinux-x86_64-image = "manylinux_2_28"
 manylinux-aarch64-image = "manylinux_2_28"
 
-[tool.cibuildwheel.macos]
-# Ensures we target a modern enough SDK for C++20 features
-environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
-
 [tool.cibuildwheel.linux]
-# This ensures we build for both Pi 4/5 (aarch64) and older Pi/Zero (armv7l)
-archs = ["x86_64", "aarch64", "armv7l"]
+# Build for standard PC and Raspberry Pi 4/5
+archs = ["x86_64", "aarch64"]
+
+[tool.cibuildwheel.macos]
+# Unlocks C++20 stability on Apple
+environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
