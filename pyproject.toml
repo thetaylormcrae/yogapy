@@ -8,13 +8,15 @@ version = "0.1.0"
 requires-python = ">=3.10"
 
 [tool.scikit-build]
-# GOTCHA FIX: Removed 'wheel.expand' which was causing the sdist error.
-# We use 'search' to tell scikit-build where to find the compiled module.
 cmake.args = [
     "-DCMAKE_CXX_STANDARD=20",
     "-DYOGA_BUILD_C=ON",
     "-DBUILD_TESTING=OFF"
 ]
+# Ensure the build type is Release for the final wheel
+cmake.build-type = "Release"
+# This makes sure the wheel is tagged as a platform wheel (not 'any')
+wheel.py-api = "cp310"
 
 [tool.cibuildwheel]
 skip = "cp36-* cp37-* cp38-* cp39-* pp*"
