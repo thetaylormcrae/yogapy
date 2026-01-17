@@ -1,45 +1,19 @@
 [build-system]
-requires = ["setuptools>=61", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
 
 [project]
 name = "yogapy"
-description = "Python bindings for Facebook Yoga with native library bundling"
+version = "0.1.0"
+description = "Native Yoga bindings for high-speed e-ink layouts"
 readme = "README.md"
+authors = [{ name = "Taylor McRae" }]
 requires-python = ">=3.9"
-license = "MIT"
-authors = [
-  { name = "Taylor McRae" }
+
+[tool.scikit-build]
+# Pass variables to CMake to ensure Yoga builds correctly
+cmake.args = [
+    "-DYOGA_BUILD_C=ON",
+    "-DYOGA_BUILD_SHARED=OFF",
+    "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 ]
-
-# semantic-release will write the version into version.py
-dynamic = ["version"]
-
-dependencies = [
-]
-
-[tool.setuptools]
-package-dir = {"" = "src"}
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-# FIX 1: Read the variable, not the whole file
-[tool.setuptools.dynamic]
-version = { attr = "yogapy.version.__version__" }
-
-# FIX 2: Explicitly include the compiled artifacts
-[tool.setuptools.package-data]
-"yogapy" = ["_native/**/*"]
-
-[tool.semantic_release]
-version_source = "variable"
-version_variable = "src/yogapy/version.py:__version__"
-upload_to_pypi = false
-upload_to_release = false
-tag_format = "v{version}"
-commit_message = "chore(release): {version}"
-
-[tool.semantic_release.branches.main]
-match = "main"
-prerelease = false
