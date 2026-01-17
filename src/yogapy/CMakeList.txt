@@ -1,0 +1,29 @@
+cmake_minimum_required(VERSION 3.15)
+project(yogapy LANGUAGES CXX)
+
+# 1. Automated Fetching of Yoga Source
+include(FetchContent)
+FetchContent_Declare(
+  yoga_src
+  GIT_REPOSITORY https://github.com/facebook/yoga.git
+  GIT_TAG        v3.2.1  # Use a specific stable tag
+)
+
+# This replaces the need for a submodule folder
+FetchContent_MakeAvailable(yoga_src)
+
+# 2. Setup Pybind11
+find_package(pybind11 REQUIRED)
+
+# 3. Create Extension Module
+pybind11_add_module(_native src/wrapper.cpp)
+
+# 4. Linkage
+# Note: Yoga's CMake exports the target 'yogacore'
+target_link_libraries(_native PRIVATE yogacore)
+
+# Ensure the compiler can find Yoga headers from the fetched source
+target_include_directories(_native PRIVATE 
+    ${yoga_src_SOURCE_DIR}
+    ${yoga_src_SOURCE_DIR}/yoga
+)
