@@ -22,6 +22,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Debug workspace root
+        shell: bash
         run: |
           echo "=== WORKSPACE ROOT ==="
           pwd
@@ -32,15 +33,19 @@ jobs:
         uses: lukka/get-cmake@latest
 
       - name: Clone Yoga
+        shell: bash
         run: git clone --depth 1 https://github.com/facebook/yoga yoga
 
       - name: Debug Yoga tree
+        shell: bash
         run: |
           echo "=== YOGA TREE ==="
           ls -R yoga
 
       - name: Configure Yoga
+        shell: bash
         run: |
+          echo "=== CONFIGURING YOGA ==="
           cmake -S yoga -B yoga/build \
             -DCMAKE_BUILD_TYPE=Release \
             -DYOGA_BUILD_C=ON \
@@ -48,7 +53,10 @@ jobs:
             -DYOGA_BUILD_TESTS=ON
 
       - name: Build Yoga
-        run: cmake --build yoga/build --config Release --parallel 4
+        shell: bash
+        run: |
+          echo "=== BUILDING YOGA ==="
+          cmake --build yoga/build --config Release --parallel 4
 
       - name: Locate Yoga library
         id: locate
@@ -61,6 +69,7 @@ jobs:
           echo "yoga_lib=$LIB" >> "$GITHUB_OUTPUT"
 
       - name: Copy Yoga library into package
+        shell: bash
         run: |
           echo "=== COPYING NATIVE LIB ==="
           case "${{ runner.os }}" in
@@ -71,11 +80,7 @@ jobs:
 
           mkdir -p src/yogapy/_native/$PLATFORM
 
-          if [[ "$PLATFORM" == "windows" ]]; then
-            pwsh -Command "Copy-Item '${{ steps.locate.outputs.yoga_lib }}' 'src/yogapy/_native/windows/'"
-          else
-            cp "${{ steps.locate.outputs.yoga_lib }}" "src/yogapy/_native/$PLATFORM/"
-          fi
+          cp "${{ steps.locate.outputs.yoga_lib }}" "src/yogapy/_native/$PLATFORM/"
 
           echo "=== NATIVE LIB TREE ==="
           ls -R src/yogapy/_native
@@ -98,6 +103,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Debug workspace root
+        shell: bash
         run: |
           echo "=== WORKSPACE ROOT ==="
           pwd
@@ -110,11 +116,13 @@ jobs:
           path: native_libs/
 
       - name: Debug native libs
+        shell: bash
         run: |
           echo "=== NATIVE LIBS DOWNLOADED ==="
           ls -R native_libs
 
       - name: Move native libs into project tree
+        shell: bash
         run: |
           mkdir -p src/yogapy/_native
           cp -R native_libs/* src/yogapy/_native/
@@ -122,6 +130,7 @@ jobs:
           ls -R src/yogapy
 
       - name: Debug version.py content
+        shell: bash
         run: |
           echo "=== VERSION.PY CONTENT ==="
           cat src/yogapy/version.py
@@ -131,84 +140,4 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install build + semantic-release
-        run: pip install build python-semantic-release
-
-      - name: Run semantic-release version bump
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "=== RUNNING SEMANTIC-RELEASE VERSION ==="
-          semantic-release version
-
-      - name: Refresh checkout after version bump
-        run: |
-          echo "=== REFRESHING CHECKOUT ==="
-          git fetch --tags
-          git pull --rebase
-          echo "=== VERSION.PY AFTER SEMANTIC-RELEASE ==="
-          cat src/yogapy/version.py
-
-      - name: Build sdist and wheel
-        run: |
-          echo "=== BUILDING WHEEL ==="
-          python -m build --sdist --wheel --outdir dist
-          echo "=== DIST TREE ==="
-          ls -R dist
-
-      - name: Debug wheel metadata
-        run: |
-          echo "=== WHEEL METADATA ==="
-          unzip -p dist/*.whl "*/METADATA" || true
-
-      - name: Upload distributions
-        uses: actions/upload-artifact@v4
-        with:
-          name: yogapy-dist
-          path: dist/*
-          if-no-files-found: error
-
-  release:
-    needs: build-dist
-    runs-on: ubuntu-latest
-    environment: pypi
-
-    permissions:
-      id-token: write
-      contents: write
-
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download distributions
-        uses: actions/download-artifact@v4
-        with:
-          name: yogapy-dist
-          path: dist
-
-      - name: Debug dist contents
-        run: |
-          echo "=== DIST CONTENTS ==="
-          ls -R dist
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
-      - name: Install semantic-release
-        run: pip install python-semantic-release
-
-      - name: Finalize GitHub release notes
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          echo "=== RUNNING SEMANTIC-RELEASE PUBLISH ==="
-          semantic-release publish
-
-      - name: Publish to PyPI via OIDC
-        uses: pypa/gh-action-pypi-publish@v1.8.10
-        with:
-          print-hash: true
+      - name: Install build
