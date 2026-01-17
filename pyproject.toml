@@ -8,7 +8,11 @@ version = "0.1.0"
 description = "Fast Yoga layout engine for e-ink displays"
 readme = "README.md"
 authors = [{ name = "Taylor McRae" }]
-requires-python = ">=3.9"
+requires-python = ">=3.10"
+
+[tool.cibuildwheel]
+# Skip Python 3.9 and older, and skip PyPy (which struggles with C++ extensions)
+skip = "cp36-* cp37-* cp38-* cp39-* pp*"
 
 [tool.scikit-build]
 cmake.args = [
