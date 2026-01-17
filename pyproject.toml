@@ -5,15 +5,15 @@ build-backend = "scikit_build_core.build"
 [project]
 name = "yogapy"
 version = "0.1.0"
-description = "Native Yoga bindings for high-speed e-ink layouts"
+description = "Fast Yoga layout engine for e-ink displays"
 readme = "README.md"
 authors = [{ name = "Taylor McRae" }]
 requires-python = ">=3.9"
 
 [tool.scikit-build]
-# Pass variables to CMake to ensure Yoga builds correctly
 cmake.args = [
     "-DYOGA_BUILD_C=ON",
     "-DYOGA_BUILD_SHARED=OFF",
     "-DCMAKE_POSITION_INDEPENDENT_CODE=ON"
 ]
+wheel.install-dir = "yogapy"
