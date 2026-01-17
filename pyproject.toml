@@ -1,36 +1,40 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "yogapy"
-description = "Python bindings for Facebook Yoga with bundled native libraries"
+description = "Python bindings for Facebook Yoga with native library bundling"
 readme = "README.md"
-requires-python = ">=3.8"
-license = { text = "MIT" }
-authors = [{ name = "Taylor McRae" }]
+requires-python = ">=3.9"
+license = "MIT"
+authors = [
+  { name = "Taylor McRae" }
+]
+
+# semantic-release will write the version into version.py
 dynamic = ["version"]
 
 dependencies = [
-    "cffi>=1.16",
 ]
 
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+[tool.setuptools]
+package-dir = {"" = "src"}
 
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-yogapy = [
-    "_native/linux/*",
-    "_native/macos/*",
-    "_native/windows/*",
-]
-
-# Tell setuptools to read the version from your version.py file
 [tool.setuptools.dynamic]
-version = { attr = "yogapy.version.__version__" }
+version = { file = "src/yogapy/version.py" }
 
 [tool.semantic_release]
+version_source = "variable"
 version_variable = "src/yogapy/version.py:__version__"
 upload_to_pypi = false
-upload_to_release = true
-build_command = "pip install build && python -m build"
+upload_to_release = false
+tag_format = "v{version}"
+commit_message = "chore(release): {version}"
+
+[tool.semantic_release.branches.main]
+match = "main"
+prerelease = false
