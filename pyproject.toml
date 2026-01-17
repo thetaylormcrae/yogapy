@@ -5,6 +5,7 @@ readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [{ name = "Taylor McRae" }]
+dynamic = ["version"]
 
 dependencies = [
     "cffi>=1.16",
