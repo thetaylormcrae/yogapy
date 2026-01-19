@@ -1,25 +1,26 @@
 cmake_minimum_required(VERSION 3.15)
 project(yogapy LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-include(FetchContent)
-FetchContent_Declare(
-  yoga_src
-  GIT_REPOSITORY https://github.com/facebook/yoga.git
-  GIT_TAG        v3.1.0
+find_package(pybind11 REQUIRED)
+
+# Use YOGA_SRC_DIR if provided by environment
+if(NOT YOGA_SRC_DIR)
+    set(YOGA_SRC_DIR "${CMAKE_SOURCE_DIR}/yoga_src")
+endif()
+
+set(YOGA_DIR "${YOGA_SRC_DIR}")
+
+file(GLOB_RECURSE YOGA_SOURCES
+    "${YOGA_DIR}/yoga/*.cpp"
 )
 
-# GOTCHA FIX: Disable testing to avoid sub-dependency hell
-set(YOGA_BUILD_C ON CACHE BOOL "" FORCE)
-set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+pybind11_add_module(_yogapy src/main.cpp ${YOGA_SOURCES})
 
-FetchContent_MakeAvailable(yoga_src)
+target_include_directories(_yogapy PRIVATE
+    "${YOGA_DIR}"
+)
 
-find_package(pybind11 REQUIRED)
-pybind11_add_module(_native src/wrapper.cpp)
-target_link_libraries(_native PRIVATE yogacore)
-# This tells scikit-build-core to actually put the file in the wheel
-install(TARGETS _native DESTINATION yogapy)
-target_include_directories(_native PRIVATE ${yoga_src_SOURCE_DIR})
+target_compile_definitions(_yogapy PRIVATE YOGA_EXPORT_SYMBOLS=0)

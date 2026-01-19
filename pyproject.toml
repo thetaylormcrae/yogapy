@@ -1,33 +1,17 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11>=2.12"]
-build-backend = "scikit_build_core.build"
+requires = ["scikit-build-core>=0.5", "pybind11>=2.11"]
+build-backend = "scikit-build-core.build"
 
 [project]
 name = "yogapy"
 version = "0.1.0"
-requires-python = ">=3.10"
+description = "Native Python bindings for Facebook Yoga v3.2.1"
+readme = "README.md"
+authors = [{name = "Your Name"}]
+requires-python = ">=3.9"
+license = {text = "MIT"}
 
 [tool.scikit-build]
-cmake.args = [
-    "-DCMAKE_CXX_STANDARD=20",
-    "-DYOGA_BUILD_C=ON",
-    "-DBUILD_TESTING=OFF"
-]
-# Ensure the build type is Release for the final wheel
-cmake.build-type = "Release"
-# This makes sure the wheel is tagged as a platform wheel (not 'any')
-wheel.py-api = "cp310"
-
-[tool.cibuildwheel]
-skip = "cp36-* cp37-* cp38-* cp39-* pp*"
-
-# FIX for Linux: Force the modern image to avoid the 'yum' and 'bit_cast' errors
-manylinux-x86_64-image = "manylinux_2_28"
-manylinux-aarch64-image = "manylinux_2_28"
-
-[tool.cibuildwheel.linux]
-archs = ["x86_64", "aarch64"]
-# Remove any 'before-all' or 'environment' hacks—they aren't needed on 2_28
-
-[tool.cibuildwheel.macos]
-environment = { MACOSX_DEPLOYMENT_TARGET = "11.0" }
+cmake.args = ["-DYOGA_SRC_DIR=yoga_src"]
+wheel.install-dir = "yogapy"
+sdist.include = ["yoga_src/*", "src/*"]
