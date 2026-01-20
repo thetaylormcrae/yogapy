@@ -1,26 +1,43 @@
 cmake_minimum_required(VERSION 3.15)
 project(yogapy LANGUAGES CXX)
 
-# Yoga 3.x needs C++17 or C++20
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 find_package(pybind11 REQUIRED)
 
-# This directory points to the 'yoga' subfolder within the fetched source
-set(YOGA_DIR "${CMAKE_SOURCE_DIR}/yoga_src/yoga")
+# Logical path resolution for CI and Local
+if(NOT YOGA_SRC_DIR)
+    set(YOGA_SRC_DIR "${CMAKE_SOURCE_DIR}/yoga_src")
+endif()
 
-# We only need the .cpp files for core layout logic
+message(STATUS "Looking for Yoga in: ${YOGA_SRC_DIR}")
+
+# Recursive globbing ensures all Yoga sub-components are found
 file(GLOB_RECURSE YOGA_SOURCES
-    "${YOGA_DIR}/*.cpp"
+    "${YOGA_SRC_DIR}/yoga/*.cpp"
+    "${YOGA_SRC_DIR}/yoga/*.c"
 )
 
+if(NOT YOGA_SOURCES)
+    message(FATAL_ERROR "Yoga sources not found at ${YOGA_SRC_DIR}. Build cannot continue.")
+endif()
+
+# Create the Python module
 pybind11_add_module(_yogapy src/main.cpp ${YOGA_SOURCES})
 
+# Platform-agnostic include directories
 target_include_directories(_yogapy PRIVATE
-    "${CMAKE_SOURCE_DIR}/yoga_src" # For #include "yoga/Yoga.h"
+    "${YOGA_SRC_DIR}"
+    "src"
 )
 
-# Crucial for Windows: avoid trying to export internal Yoga symbols
-target_compile_definitions(_yogapy PRIVATE YOGA_EXPORT_SYMBOLS=0)
+# Fix for MSVC symbol export issues on Windows
+if(WIN32)
+    target_compile_definitions(_yogapy PRIVATE YOGA_EXPORT_SYMBOLS=0)
+    target_compile_options(_yogapy PRIVATE /W4) # Higher warning level for Windows
+else()
+    target_compile_options(_yogapy PRIVATE -Wall -Wextra)
+endif()
+
+install(TARGETS _yogapy DESTINATION .)

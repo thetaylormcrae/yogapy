@@ -28,6 +28,9 @@ jobs:
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
 
       - name: Fetch Yoga Source (v3.2.1)
         shell: bash
@@ -40,17 +43,29 @@ jobs:
         if: matrix.arch == 'aarch64'
         uses: docker/setup-qemu-action@v3
 
+      # Add this logical step before your build step in GitHub Actions
+      - name: Prepare Sources
+        shell: bash
+        run: |
+          # Ensure a clean state for the build
+          rm -rf yoga_src
+          # Pull a stable release of Yoga
+          curl -L https://github.com/facebook/yoga/archive/refs/tags/v3.1.0.tar.gz -o yoga.tar.gz
+          tar -xzf yoga.tar.gz
+          mv yoga-3.1.0 yoga_src
+          echo "Sources prepared at $(pwd)/yoga_src"
+
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.16.2
         env:
-          # Correct architecture tags for Linux
           CIBW_ARCHS_LINUX: ${{ matrix.arch == 'aarch64' && 'aarch64' || 'x86_64' }}
           CIBW_ARCHS_MACOS: ${{ matrix.arch }}
           CIBW_ARCHS_WINDOWS: ${{ matrix.arch }}
           CIBW_SKIP: "*-musllinux_* cp36-* cp37-* cp38-*"
-          # Explicitly install build backend dependencies
+          CIBW_BUILD_FRONTEND: "build"
           CIBW_BEFORE_BUILD: pip install scikit-build-core pybind11
           CIBW_ENVIRONMENT: CMAKE_ARGS="-DYOGA_SRC_DIR=yoga_src -DCMAKE_CXX_STANDARD=17"
+          CIBW_TEST_COMMAND: python -c "import yogapy; print('Module imported successfully')"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
