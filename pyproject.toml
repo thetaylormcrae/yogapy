@@ -14,4 +14,4 @@ license = {text = "MIT"}
 [tool.scikit-build]
 cmake.args = ["-DYOGA_SRC_DIR=yoga_src"]
 wheel.install-dir = "yogapy"
-sdist.include = ["yoga_src/*", "src/*"]
+sdist.include = ["yoga_src/yoga/**/*", "src/**/*"]
